@@ -58,7 +58,9 @@ app.add_middleware(
 
 # Include routers
 from app.modules.calendar.router import router as calendar_router
+from app.modules.degrees.router import router as degrees_router
 app.include_router(calendar_router)
+app.include_router(degrees_router)
 
 
 @app.get("/")

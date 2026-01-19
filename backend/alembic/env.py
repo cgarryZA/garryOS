@@ -19,6 +19,7 @@ if config.config_file_name is not None:
 # Import all models to ensure they are registered with SQLAlchemy
 from app.models import Base
 from app.modules.calendar import models  # noqa: F401
+from app.modules.degrees import models  # noqa: F401
 
 target_metadata = Base.metadata
 
