@@ -1,7 +1,7 @@
 """
 Degree tracker database models
 """
-from sqlalchemy import Column, String, Integer, Float, ForeignKey, DateTime, Enum as SQLEnum
+from sqlalchemy import Column, String, Integer, Float, ForeignKey, DateTime, Enum as SQLEnum, Date, Time, Text
 from sqlalchemy.orm import relationship
 from datetime import datetime
 import enum
@@ -88,8 +88,12 @@ class Coursework(BaseModel):
     graded_at = Column(DateTime)
     feedback = Column(String(2000))  # Teacher feedback
 
+    # Linked task for deadline tracking
+    linked_task_id = Column(String(36), ForeignKey("calendar_items.id", ondelete="SET NULL"), nullable=True, index=True)
+
     # Relationships
     module = relationship("Module", back_populates="coursework")
+    linked_task = relationship("CalendarItem", foreign_keys=[linked_task_id])
 
     @property
     def percentage(self) -> float:
@@ -102,3 +106,23 @@ class Coursework(BaseModel):
     def is_graded(self) -> bool:
         """Check if coursework has been graded"""
         return self.achieved_marks is not None
+
+
+class Lecture(BaseModel):
+    """
+    Represents a recurring lecture within a module
+    """
+    __tablename__ = "lectures"
+
+    module_id = Column(String(36), ForeignKey("modules.id", ondelete="CASCADE"), nullable=False, index=True)
+    title = Column(String(200), nullable=False)  # e.g., "Weekly Lecture", "Lab Session"
+    location = Column(String(200))  # e.g., "Room 101", "Online"
+    day_of_week = Column(Integer, nullable=False)  # 0-6, Monday=0, Sunday=6
+    start_time = Column(Time, nullable=False)  # Time of day lecture starts
+    end_time = Column(Time, nullable=False)  # Time of day lecture ends
+    recurrence_start_date = Column(Date, nullable=False)  # First occurrence date
+    recurrence_end_date = Column(Date, nullable=False)  # Last occurrence date
+    notes = Column(Text)  # Additional notes about the lecture
+
+    # Relationships
+    module = relationship("Module", backref="lectures")

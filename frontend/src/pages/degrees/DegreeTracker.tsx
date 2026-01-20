@@ -2,10 +2,14 @@
  * Degree Tracker - Main page for managing degree programs, modules, and coursework
  */
 import { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { degreesAPI } from '../../api/degrees';
 import type { DegreeProgram, Module, DegreeStatistics } from '../../types/degrees';
+import AddModuleModal from '../../components/degrees/AddModuleModal';
+import TargetGradeCalculator from '../../components/degrees/TargetGradeCalculator';
 
 export default function DegreeTracker() {
+  const navigate = useNavigate();
   const [programs, setPrograms] = useState<DegreeProgram[]>([]);
   const [selectedProgram, setSelectedProgram] = useState<string | null>(null);
   const [modules, setModules] = useState<Module[]>([]);
@@ -206,35 +210,46 @@ export default function DegreeTracker() {
         </div>
       )}
 
-      {/* Best/Worst Case Scenario */}
-      {stats && stats.overall_average && (
-        <div className="bg-gradient-to-r from-green-50 to-blue-50 rounded-lg shadow p-6 mb-8">
-          <h3 className="text-lg font-bold text-gray-800 mb-4">Grade Projections</h3>
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-            <div className="text-center">
-              <div className="text-sm text-gray-600 mb-1">Best Case</div>
-              <div className={`text-2xl font-bold ${getGradeClass(stats.best_case_grade)}`}>
-                {stats.best_case_grade.toFixed(1)}%
+      {/* Grade Analysis Section */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 mb-8">
+        {/* Best/Worst Case Scenario */}
+        {stats && stats.overall_average && (
+          <div className="bg-gradient-to-r from-green-50 to-blue-50 rounded-lg shadow p-6 h-fit">
+            <h3 className="text-lg font-bold text-gray-800 mb-4">Grade Projections</h3>
+            <div className="grid grid-cols-3 gap-4">
+              <div className="text-center">
+                <div className="text-sm text-gray-600 mb-1">Best Case</div>
+                <div className={`text-2xl font-bold ${getGradeClass(stats.best_case_grade)}`}>
+                  {stats.best_case_grade.toFixed(1)}%
+                </div>
+                <div className="text-xs text-gray-500">{getGradeLabel(stats.best_case_grade)}</div>
               </div>
-              <div className="text-xs text-gray-500">{getGradeLabel(stats.best_case_grade)}</div>
-            </div>
-            <div className="text-center">
-              <div className="text-sm text-gray-600 mb-1">Current</div>
-              <div className={`text-2xl font-bold ${getGradeClass(stats.overall_average)}`}>
-                {stats.overall_average.toFixed(1)}%
+              <div className="text-center">
+                <div className="text-sm text-gray-600 mb-1">Current</div>
+                <div className={`text-2xl font-bold ${getGradeClass(stats.overall_average)}`}>
+                  {stats.overall_average.toFixed(1)}%
+                </div>
+                <div className="text-xs text-gray-500">{getGradeLabel(stats.overall_average)}</div>
               </div>
-              <div className="text-xs text-gray-500">{getGradeLabel(stats.overall_average)}</div>
-            </div>
-            <div className="text-center">
-              <div className="text-sm text-gray-600 mb-1">Worst Case</div>
-              <div className={`text-2xl font-bold ${getGradeClass(stats.worst_case_grade)}`}>
-                {stats.worst_case_grade.toFixed(1)}%
+              <div className="text-center">
+                <div className="text-sm text-gray-600 mb-1">Worst Case</div>
+                <div className={`text-2xl font-bold ${getGradeClass(stats.worst_case_grade)}`}>
+                  {stats.worst_case_grade.toFixed(1)}%
+                </div>
+                <div className="text-xs text-gray-500">{getGradeLabel(stats.worst_case_grade)}</div>
               </div>
-              <div className="text-xs text-gray-500">{getGradeLabel(stats.worst_case_grade)}</div>
             </div>
           </div>
-        </div>
-      )}
+        )}
+
+        {/* Target Grade Calculator */}
+        {selectedProgram && (
+          <TargetGradeCalculator
+            programId={selectedProgram}
+            currentAverage={stats?.overall_average}
+          />
+        )}
+      </div>
 
       {/* Modules Section */}
       <div className="mb-8">
@@ -255,13 +270,19 @@ export default function DegreeTracker() {
         ) : (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
             {modules.map(module => (
-              <div key={module.id} className="bg-white rounded-lg shadow hover:shadow-lg transition-shadow p-6">
+              <div
+                key={module.id}
+                className="bg-white rounded-lg shadow hover:shadow-lg transition-all p-6 cursor-pointer group"
+                onClick={() => navigate(`/degrees/modules/${module.id}`)}
+              >
                 <div className="flex justify-between items-start mb-3">
                   <div>
                     {module.code && (
                       <div className="text-sm font-semibold text-blue-600 mb-1">{module.code}</div>
                     )}
-                    <h3 className="font-bold text-gray-800">{module.name}</h3>
+                    <h3 className="font-bold text-gray-800 group-hover:text-blue-600 transition-colors">
+                      {module.name}
+                    </h3>
                   </div>
                   <span className={`px-2 py-1 text-xs rounded-full ${
                     module.status === 'completed' ? 'bg-green-100 text-green-800' :
@@ -291,24 +312,35 @@ export default function DegreeTracker() {
                   )}
                 </div>
 
-                <button
-                  onClick={() => {/* Navigate to module details */}}
-                  className="mt-4 w-full bg-blue-50 hover:bg-blue-100 text-blue-700 py-2 rounded-lg font-semibold transition-colors"
-                >
+                <div className="mt-4 w-full bg-blue-50 group-hover:bg-blue-100 text-blue-700 py-2 rounded-lg font-semibold transition-colors text-center">
                   View Details →
-                </button>
+                </div>
               </div>
             ))}
           </div>
         )}
       </div>
 
-      {/* Modals would go here */}
+      {/* Modals */}
+      {showAddModule && selectedProgram && (
+        <AddModuleModal
+          isOpen={showAddModule}
+          onClose={() => setShowAddModule(false)}
+          programId={selectedProgram}
+          onSuccess={() => {
+            if (selectedProgram) {
+              loadModules(selectedProgram);
+              loadStats(selectedProgram);
+            }
+          }}
+        />
+      )}
+
       {showAddProgram && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4">
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
           <div className="bg-white rounded-lg p-6 max-w-md w-full">
             <h3 className="text-xl font-bold mb-4">Add Degree Program</h3>
-            {/* Form fields here */}
+            {/* Form fields here - TODO: Create AddProgramModal component */}
             <div className="flex justify-end gap-2 mt-6">
               <button
                 onClick={() => setShowAddProgram(false)}

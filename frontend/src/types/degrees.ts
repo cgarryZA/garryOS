@@ -108,3 +108,35 @@ export interface CourseworkFormData {
   status?: string;
   feedback?: string;
 }
+
+export interface Lecture {
+  id: string;
+  module_id: string;
+  title: string;
+  day_of_week: number; // 0 = Monday, 6 = Sunday
+  start_time: string; // HH:MM format
+  end_time: string; // HH:MM format
+  recurrence_start_date: string;
+  recurrence_end_date?: string;
+  location?: string;
+  notes?: string;
+  created_at: string;
+}
+
+export interface LectureFormData {
+  title: string;
+  day_of_week: number;
+  start_time: string;
+  end_time: string;
+  recurrence_start_date: string;
+  recurrence_end_date?: string;
+  location?: string;
+  notes?: string;
+}
+
+export interface TaskReference {
+  id: string;
+  title: string;
+  status: 'not_started' | 'in_progress' | 'completed';
+  due_date?: string;
+}

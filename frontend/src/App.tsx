@@ -6,6 +6,7 @@ import Tasks from './pages/Tasks'
 import Calendar from './pages/Calendar'
 import Reminders from './pages/Reminders'
 import DegreeTracker from './pages/degrees/DegreeTracker'
+import ModuleDetail from './pages/degrees/ModuleDetail'
 
 // Create a client
 const queryClient = new QueryClient({
@@ -29,6 +30,7 @@ function App() {
             <Route path="/calendar" element={<Calendar />} />
             <Route path="/reminders" element={<Reminders />} />
             <Route path="/degrees" element={<DegreeTracker />} />
+            <Route path="/degrees/modules/:moduleId" element={<ModuleDetail />} />
           </Routes>
         </Layout>
       </Router>

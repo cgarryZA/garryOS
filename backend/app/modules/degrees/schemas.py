@@ -3,7 +3,7 @@ Pydantic schemas for degree tracker
 """
 from pydantic import BaseModel, Field, field_validator
 from typing import Optional, List
-from datetime import datetime
+from datetime import datetime, date, time
 from uuid import UUID
 
 
@@ -126,6 +126,8 @@ class CourseworkResponse(BaseModel):
     submitted_at: Optional[datetime]
     graded_at: Optional[datetime]
     feedback: Optional[str]
+    linked_task_id: Optional[UUID] = None
+    task_status: Optional[str] = None
     created_at: datetime
 
     class Config:
@@ -167,3 +169,58 @@ class TargetGradeCalculation(BaseModel):
     required_average_on_remaining: float = Field(description="Required average on remaining coursework")
     achievable: bool = Field(description="Whether target is still achievable")
     margin: float = Field(description="How much above/below required average")
+
+
+# Lecture Schemas
+
+class LectureCreate(BaseModel):
+    title: str = Field(..., min_length=1, max_length=200, description="Lecture title")
+    location: Optional[str] = Field(None, max_length=200, description="Lecture location")
+    day_of_week: int = Field(..., ge=0, le=6, description="Day of week (0=Monday, 6=Sunday)")
+    start_time: time = Field(..., description="Lecture start time")
+    end_time: time = Field(..., description="Lecture end time")
+    recurrence_start_date: date = Field(..., description="First occurrence date")
+    recurrence_end_date: date = Field(..., description="Last occurrence date")
+    notes: Optional[str] = Field(None, description="Additional notes")
+
+    @field_validator('end_time')
+    @classmethod
+    def validate_end_time(cls, v, info):
+        if 'start_time' in info.data and v <= info.data['start_time']:
+            raise ValueError('end_time must be after start_time')
+        return v
+
+    @field_validator('recurrence_end_date')
+    @classmethod
+    def validate_recurrence_end_date(cls, v, info):
+        if 'recurrence_start_date' in info.data and v < info.data['recurrence_start_date']:
+            raise ValueError('recurrence_end_date must be on or after recurrence_start_date')
+        return v
+
+
+class LectureUpdate(BaseModel):
+    title: Optional[str] = Field(None, min_length=1, max_length=200)
+    location: Optional[str] = Field(None, max_length=200)
+    day_of_week: Optional[int] = Field(None, ge=0, le=6)
+    start_time: Optional[time] = None
+    end_time: Optional[time] = None
+    recurrence_start_date: Optional[date] = None
+    recurrence_end_date: Optional[date] = None
+    notes: Optional[str] = None
+
+
+class LectureResponse(BaseModel):
+    id: UUID
+    module_id: UUID
+    title: str
+    location: Optional[str]
+    day_of_week: int
+    start_time: time
+    end_time: time
+    recurrence_start_date: date
+    recurrence_end_date: date
+    notes: Optional[str]
+    created_at: datetime
+
+    class Config:
+        from_attributes = True

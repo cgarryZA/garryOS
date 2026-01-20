@@ -95,6 +95,8 @@ class CalendarItemBase(BaseModel):
         CalendarItemStatus.PENDING,
         description="Current status"
     )
+    source_type: Optional[str] = Field(None, max_length=50, description="Source module type")
+    source_id: Optional[str] = Field(None, max_length=36, description="Source entity ID")
 
     @field_validator("end_time")
     @classmethod
@@ -148,6 +150,8 @@ class CalendarItemResponse(CalendarItemBase):
     id: UUID
     user_id: UUID
     completed_at: Optional[datetime] = None
+    source_type: Optional[str] = None
+    source_id: Optional[str] = None
     created_at: datetime
     updated_at: datetime
 

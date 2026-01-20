@@ -4,9 +4,9 @@ Degree tracker service layer - business logic and calculations
 from sqlalchemy.orm import Session
 from typing import List, Optional
 from uuid import UUID
-from datetime import datetime
+from datetime import datetime, timedelta, date, time as dt_time
 
-from app.modules.degrees.models import DegreeProgram, Module, Coursework, ModuleStatus, CourseworkStatus
+from app.modules.degrees.models import DegreeProgram, Module, Coursework, Lecture, ModuleStatus, CourseworkStatus
 from app.modules.degrees.schemas import (
     DegreeProgramCreate,
     DegreeProgramUpdate,
@@ -14,10 +14,14 @@ from app.modules.degrees.schemas import (
     ModuleUpdate,
     CourseworkCreate,
     CourseworkUpdate,
+    LectureCreate,
+    LectureUpdate,
     ModuleStatistics,
     DegreeStatistics,
     TargetGradeCalculation,
 )
+from app.modules.calendar.models import CalendarItem, CalendarItemType, CalendarItemStatus
+from app.core.events import event_bus, EventTypes
 
 
 class DegreeService:
@@ -152,8 +156,8 @@ class DegreeService:
     # ===== Coursework Methods =====
 
     @staticmethod
-    def create_coursework(db: Session, module_id: UUID, coursework: CourseworkCreate) -> Coursework:
-        """Create a new coursework item"""
+    async def create_coursework(db: Session, module_id: UUID, coursework: CourseworkCreate) -> Coursework:
+        """Create a new coursework item and auto-create linked task if deadline exists"""
         # Verify module exists
         module = DegreeService.get_module(db, module_id)
         if not module:
@@ -176,6 +180,46 @@ class DegreeService:
             db_coursework.graded_at = datetime.utcnow()
 
         db.add(db_coursework)
+        db.flush()  # Flush to get coursework.id without committing
+
+        # Auto-create linked task if deadline exists
+        if coursework.deadline:
+            # Get user_id from module's program
+            program = db.query(DegreeProgram).filter(DegreeProgram.id == module.program_id).first()
+            if program:
+                # Create calendar task
+                task = CalendarItem(
+                    user_id=program.user_id,
+                    type=CalendarItemType.TASK,
+                    title=f"{coursework.name} ({module.code or module.name})",
+                    description=f"Due: {coursework.deadline.strftime('%Y-%m-%d %H:%M')}",
+                    start_time=coursework.deadline - timedelta(days=7),  # 7 days before deadline
+                    end_time=coursework.deadline,
+                    status=CalendarItemStatus.PENDING,
+                    source_type='coursework',
+                    source_id=str(db_coursework.id),
+                    progress_percent=0,
+                )
+                db.add(task)
+                db.flush()
+
+                # Link task to coursework
+                db_coursework.linked_task_id = str(task.id)
+
+                # Publish event
+                await event_bus.publish(
+                    EventTypes.ITEM_CREATED,
+                    {
+                        "item_id": str(task.id),
+                        "title": task.title,
+                        "type": "task",
+                        "user_id": str(program.user_id),
+                        "source": "coursework",
+                        "coursework_id": str(db_coursework.id),
+                    },
+                    db=db,
+                )
+
         db.commit()
         db.refresh(db_coursework)
         return db_coursework
@@ -191,10 +235,10 @@ class DegreeService:
         return db.query(Coursework).filter(Coursework.module_id == module_id).all()
 
     @staticmethod
-    def update_coursework(
+    async def update_coursework(
         db: Session, coursework_id: UUID, coursework_update: CourseworkUpdate
     ) -> Optional[Coursework]:
-        """Update a coursework item"""
+        """Update a coursework item and sync with linked task"""
         db_coursework = DegreeService.get_coursework(db, coursework_id)
         if not db_coursework:
             return None
@@ -207,6 +251,77 @@ class DegreeService:
                 update_data['graded_at'] = datetime.utcnow()
                 update_data['status'] = CourseworkStatus.GRADED
 
+                # Mark linked task as completed if exists
+                if db_coursework.linked_task_id:
+                    task = db.query(CalendarItem).filter(
+                        CalendarItem.id == db_coursework.linked_task_id
+                    ).first()
+                    if task:
+                        task.status = CalendarItemStatus.COMPLETED
+                        task.completed_at = datetime.utcnow()
+                        task.progress_percent = 100
+
+                        await event_bus.publish(
+                            EventTypes.ITEM_COMPLETED,
+                            {
+                                "item_id": str(task.id),
+                                "title": task.title,
+                                "user_id": str(task.user_id),
+                                "auto_completed": True,
+                                "reason": "coursework_graded",
+                            },
+                            db=db,
+                        )
+
+        # If status changes to SUBMITTED, mark task as completed
+        if 'status' in update_data and update_data['status'] == CourseworkStatus.SUBMITTED:
+            if not db_coursework.submitted_at:
+                update_data['submitted_at'] = datetime.utcnow()
+
+            # Mark linked task as completed if exists
+            if db_coursework.linked_task_id:
+                task = db.query(CalendarItem).filter(
+                    CalendarItem.id == db_coursework.linked_task_id
+                ).first()
+                if task and task.status != CalendarItemStatus.COMPLETED:
+                    task.status = CalendarItemStatus.COMPLETED
+                    task.completed_at = datetime.utcnow()
+                    task.progress_percent = 100
+
+                    await event_bus.publish(
+                        EventTypes.ITEM_COMPLETED,
+                        {
+                            "item_id": str(task.id),
+                            "title": task.title,
+                            "user_id": str(task.user_id),
+                            "auto_completed": True,
+                            "reason": "coursework_submitted",
+                        },
+                        db=db,
+                    )
+
+        # If deadline changes, update linked task
+        if 'deadline' in update_data and db_coursework.linked_task_id:
+            new_deadline = update_data['deadline']
+            task = db.query(CalendarItem).filter(
+                CalendarItem.id == db_coursework.linked_task_id
+            ).first()
+            if task and new_deadline:
+                task.end_time = new_deadline
+                task.start_time = new_deadline - timedelta(days=7)
+                task.description = f"Due: {new_deadline.strftime('%Y-%m-%d %H:%M')}"
+
+                await event_bus.publish(
+                    EventTypes.ITEM_UPDATED,
+                    {
+                        "item_id": str(task.id),
+                        "title": task.title,
+                        "user_id": str(task.user_id),
+                        "updated_field": "deadline",
+                    },
+                    db=db,
+                )
+
         for field, value in update_data.items():
             setattr(db_coursework, field, value)
 
@@ -215,15 +330,50 @@ class DegreeService:
         return db_coursework
 
     @staticmethod
-    def delete_coursework(db: Session, coursework_id: UUID) -> bool:
-        """Delete a coursework item"""
+    async def delete_coursework(db: Session, coursework_id: UUID) -> bool:
+        """Delete a coursework item and its linked task"""
         db_coursework = DegreeService.get_coursework(db, coursework_id)
         if not db_coursework:
             return False
 
+        # Delete linked task if exists
+        if db_coursework.linked_task_id:
+            task = db.query(CalendarItem).filter(
+                CalendarItem.id == db_coursework.linked_task_id
+            ).first()
+            if task:
+                db.delete(task)
+                await event_bus.publish(
+                    EventTypes.ITEM_DELETED,
+                    {
+                        "item_id": str(task.id),
+                        "user_id": str(task.user_id),
+                        "reason": "coursework_deleted",
+                    },
+                    db=db,
+                )
+
         db.delete(db_coursework)
         db.commit()
         return True
+
+    @staticmethod
+    def get_coursework_with_task_status(db: Session, coursework_id: UUID) -> Optional[Coursework]:
+        """Get coursework with task status populated"""
+        coursework = DegreeService.get_coursework(db, coursework_id)
+        if not coursework:
+            return None
+
+        # Populate task_status if linked task exists
+        if coursework.linked_task_id:
+            task = db.query(CalendarItem).filter(
+                CalendarItem.id == coursework.linked_task_id
+            ).first()
+            if task:
+                # Add task_status as a dynamic attribute
+                coursework.task_status = task.status.value
+
+        return coursework
 
     # ===== Statistics & Calculations =====
 
@@ -391,3 +541,204 @@ class DegreeService:
             achievable=achievable,
             margin=margin,
         )
+
+    # ===== Lecture Methods =====
+
+    @staticmethod
+    def _generate_calendar_events_for_lecture(
+        db: Session, lecture: Lecture, module: Module, user_id: UUID
+    ) -> List[CalendarItem]:
+        """
+        Generate recurring calendar events for a lecture.
+
+        Creates one calendar event for each occurrence of the lecture between
+        recurrence_start_date and recurrence_end_date.
+        """
+        calendar_events = []
+        current_date = lecture.recurrence_start_date
+
+        # Find the first occurrence on the correct day of week
+        while current_date.weekday() != lecture.day_of_week:
+            current_date += timedelta(days=1)
+            if current_date > lecture.recurrence_end_date:
+                return calendar_events
+
+        # Generate events for each week
+        while current_date <= lecture.recurrence_end_date:
+            # Combine date and time to create datetime
+            start_datetime = datetime.combine(current_date, lecture.start_time)
+            end_datetime = datetime.combine(current_date, lecture.end_time)
+
+            # Create calendar event
+            calendar_event = CalendarItem(
+                user_id=user_id,
+                type=CalendarItemType.EVENT,
+                title=f"{module.code}: {lecture.title}" if module.code else lecture.title,
+                description=lecture.notes,
+                start_time=start_datetime,
+                end_time=end_datetime,
+                location=lecture.location,
+                status=CalendarItemStatus.PENDING,
+                source_type="lecture",
+                source_id=str(lecture.id),
+            )
+
+            db.add(calendar_event)
+            calendar_events.append(calendar_event)
+
+            # Move to next week
+            current_date += timedelta(days=7)
+
+        return calendar_events
+
+    @staticmethod
+    def _delete_calendar_events_for_lecture(db: Session, lecture_id: UUID) -> int:
+        """Delete all calendar events associated with a lecture."""
+        deleted_count = (
+            db.query(CalendarItem)
+            .filter(
+                CalendarItem.source_type == "lecture",
+                CalendarItem.source_id == str(lecture_id)
+            )
+            .delete()
+        )
+        return deleted_count
+
+    @staticmethod
+    def _update_calendar_events_for_lecture(
+        db: Session, lecture: Lecture, module: Module, user_id: UUID
+    ) -> None:
+        """
+        Update calendar events for a lecture.
+
+        Strategy: Delete all existing events and regenerate them based on the updated
+        lecture information. This handles changes to times, dates, or recurrence patterns.
+        """
+        # Delete old events
+        DegreeService._delete_calendar_events_for_lecture(db, lecture.id)
+
+        # Generate new events
+        DegreeService._generate_calendar_events_for_lecture(db, lecture, module, user_id)
+
+    @staticmethod
+    def create_lecture(
+        db: Session, module_id: UUID, lecture: LectureCreate
+    ) -> Lecture:
+        """
+        Create a new lecture and automatically generate recurring calendar events.
+
+        Args:
+            db: Database session
+            module_id: ID of the module this lecture belongs to
+            lecture: Lecture creation schema
+
+        Returns:
+            Created Lecture instance with calendar events generated
+
+        Raises:
+            ValueError: If module not found
+        """
+        # Verify module exists
+        module = DegreeService.get_module(db, module_id)
+        if not module:
+            raise ValueError("Module not found")
+
+        # Get user_id from module's program
+        program = module.program
+        if not program:
+            raise ValueError("Module has no associated program")
+
+        user_id = program.user_id
+
+        # Create lecture
+        db_lecture = Lecture(
+            module_id=module_id,
+            title=lecture.title,
+            location=lecture.location,
+            day_of_week=lecture.day_of_week,
+            start_time=lecture.start_time,
+            end_time=lecture.end_time,
+            recurrence_start_date=lecture.recurrence_start_date,
+            recurrence_end_date=lecture.recurrence_end_date,
+            notes=lecture.notes,
+        )
+
+        db.add(db_lecture)
+        db.flush()  # Flush to get the lecture ID
+
+        # Generate calendar events
+        DegreeService._generate_calendar_events_for_lecture(db, db_lecture, module, user_id)
+
+        db.commit()
+        db.refresh(db_lecture)
+        return db_lecture
+
+    @staticmethod
+    def get_lecture(db: Session, lecture_id: UUID) -> Optional[Lecture]:
+        """Get a lecture by ID."""
+        return db.query(Lecture).filter(Lecture.id == lecture_id).first()
+
+    @staticmethod
+    def list_lectures(db: Session, module_id: UUID) -> List[Lecture]:
+        """List all lectures for a module."""
+        return db.query(Lecture).filter(Lecture.module_id == module_id).all()
+
+    @staticmethod
+    def update_lecture(
+        db: Session, lecture_id: UUID, lecture_update: LectureUpdate
+    ) -> Optional[Lecture]:
+        """
+        Update a lecture and update all associated calendar events.
+
+        Args:
+            db: Database session
+            lecture_id: ID of the lecture to update
+            lecture_update: Lecture update schema
+
+        Returns:
+            Updated Lecture instance, or None if not found
+        """
+        db_lecture = DegreeService.get_lecture(db, lecture_id)
+        if not db_lecture:
+            return None
+
+        # Get module and user_id for calendar event updates
+        module = db_lecture.module
+        program = module.program
+        user_id = program.user_id
+
+        # Update lecture fields
+        update_data = lecture_update.model_dump(exclude_unset=True)
+        for field, value in update_data.items():
+            setattr(db_lecture, field, value)
+
+        # Update calendar events (delete old, create new)
+        DegreeService._update_calendar_events_for_lecture(db, db_lecture, module, user_id)
+
+        db.commit()
+        db.refresh(db_lecture)
+        return db_lecture
+
+    @staticmethod
+    def delete_lecture(db: Session, lecture_id: UUID) -> bool:
+        """
+        Delete a lecture and all associated calendar events.
+
+        Args:
+            db: Database session
+            lecture_id: ID of the lecture to delete
+
+        Returns:
+            True if deleted, False if not found
+        """
+        db_lecture = DegreeService.get_lecture(db, lecture_id)
+        if not db_lecture:
+            return False
+
+        # Delete associated calendar events
+        DegreeService._delete_calendar_events_for_lecture(db, lecture_id)
+
+        # Delete lecture
+        db.delete(db_lecture)
+        db.commit()
+        return True

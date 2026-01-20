@@ -12,6 +12,8 @@ import type {
   DegreeProgramFormData,
   ModuleFormData,
   CourseworkFormData,
+  Lecture,
+  LectureFormData,
 } from '../types/degrees';
 
 // Degree Programs
@@ -75,4 +77,20 @@ export const degreesAPI = {
     client.get<TargetGradeCalculation>(
       `/api/degrees/programs/${programId}/target-grade?target_grade=${targetGrade}`
     ),
+
+  // Lectures
+  createLecture: (moduleId: string, data: LectureFormData) =>
+    client.post<Lecture>(`/api/degrees/modules/${moduleId}/lectures`, data),
+
+  listLectures: (moduleId: string) =>
+    client.get<Lecture[]>(`/api/degrees/modules/${moduleId}/lectures`),
+
+  getLecture: (lectureId: string) =>
+    client.get<Lecture>(`/api/degrees/lectures/${lectureId}`),
+
+  updateLecture: (lectureId: string, data: Partial<LectureFormData>) =>
+    client.put<Lecture>(`/api/degrees/lectures/${lectureId}`, data),
+
+  deleteLecture: (lectureId: string) =>
+    client.delete(`/api/degrees/lectures/${lectureId}`),
 };

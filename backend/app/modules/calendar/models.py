@@ -111,6 +111,10 @@ class CalendarItem(BaseModel):
     status = Column(Enum(CalendarItemStatus), default=CalendarItemStatus.PENDING, nullable=False, index=True)
     completed_at = Column(DateTime, nullable=True)
 
+    # Source tracking (for integration with other modules)
+    source_type = Column(String(50), nullable=True, index=True)  # e.g., 'coursework', 'reminder'
+    source_id = Column(String(36), nullable=True, index=True)  # ID from source module
+
     # Timestamps
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False)
 
@@ -125,6 +129,7 @@ class CalendarItem(BaseModel):
         Index("ix_calendar_items_user_type", "user_id", "type"),
         Index("ix_calendar_items_user_status", "user_id", "status"),
         Index("ix_calendar_items_start_time", "start_time"),
+        Index("ix_calendar_items_source", "source_type", "source_id"),
     )
 
     def __repr__(self) -> str:

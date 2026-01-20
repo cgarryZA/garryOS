@@ -18,6 +18,9 @@ from app.modules.degrees.schemas import (
     CourseworkCreate,
     CourseworkUpdate,
     CourseworkResponse,
+    LectureCreate,
+    LectureUpdate,
+    LectureResponse,
     ModuleStatistics,
     DegreeStatistics,
     TargetGradeCalculation,
@@ -209,7 +212,7 @@ async def create_coursework(
     ```
     """
     try:
-        return DegreeService.create_coursework(db, module_id, coursework)
+        return await DegreeService.create_coursework(db, module_id, coursework)
     except ValueError as e:
         raise HTTPException(status_code=404, detail=str(e))
 
@@ -228,8 +231,8 @@ async def get_coursework(
     coursework_id: UUID,
     db: Session = Depends(get_db),
 ):
-    """Get a specific coursework item by ID."""
-    coursework = DegreeService.get_coursework(db, coursework_id)
+    """Get a specific coursework item by ID with linked task status."""
+    coursework = DegreeService.get_coursework_with_task_status(db, coursework_id)
     if not coursework:
         raise HTTPException(status_code=404, detail="Coursework not found")
     return coursework
@@ -252,7 +255,7 @@ async def update_coursework(
     }
     ```
     """
-    coursework = DegreeService.update_coursework(db, coursework_id, coursework_update)
+    coursework = await DegreeService.update_coursework(db, coursework_id, coursework_update)
     if not coursework:
         raise HTTPException(status_code=404, detail="Coursework not found")
     return coursework
@@ -263,8 +266,8 @@ async def delete_coursework(
     coursework_id: UUID,
     db: Session = Depends(get_db),
 ):
-    """Delete a coursework item."""
-    success = DegreeService.delete_coursework(db, coursework_id)
+    """Delete a coursework item and its linked calendar task."""
+    success = await DegreeService.delete_coursework(db, coursework_id)
     if not success:
         raise HTTPException(status_code=404, detail="Coursework not found")
     return None
@@ -336,3 +339,101 @@ async def calculate_target_grade(
         return DegreeService.calculate_target_grade(db, program_id, user_id, target_grade)
     except ValueError as e:
         raise HTTPException(status_code=404, detail=str(e))
+
+
+# ===== Lecture Endpoints =====
+
+
+@router.post("/modules/{module_id}/lectures", response_model=LectureResponse, status_code=201)
+async def create_lecture(
+    module_id: UUID,
+    lecture: LectureCreate,
+    db: Session = Depends(get_db),
+):
+    """
+    Create a new lecture for a module.
+
+    This will automatically generate recurring calendar events for each week
+    between recurrence_start_date and recurrence_end_date.
+
+    Example:
+    ```json
+    {
+      "title": "Weekly Lecture",
+      "location": "Room 101",
+      "day_of_week": 1,
+      "start_time": "09:00:00",
+      "end_time": "11:00:00",
+      "recurrence_start_date": "2024-01-08",
+      "recurrence_end_date": "2024-05-20",
+      "notes": "Bring laptop"
+    }
+    ```
+    """
+    try:
+        return DegreeService.create_lecture(db, module_id, lecture)
+    except ValueError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+
+
+@router.get("/modules/{module_id}/lectures", response_model=List[LectureResponse])
+async def list_lectures(
+    module_id: UUID,
+    db: Session = Depends(get_db),
+):
+    """List all lectures for a module."""
+    return DegreeService.list_lectures(db, module_id)
+
+
+@router.get("/lectures/{lecture_id}", response_model=LectureResponse)
+async def get_lecture(
+    lecture_id: UUID,
+    db: Session = Depends(get_db),
+):
+    """Get a specific lecture by ID."""
+    lecture = DegreeService.get_lecture(db, lecture_id)
+    if not lecture:
+        raise HTTPException(status_code=404, detail="Lecture not found")
+    return lecture
+
+
+@router.put("/lectures/{lecture_id}", response_model=LectureResponse)
+async def update_lecture(
+    lecture_id: UUID,
+    lecture_update: LectureUpdate,
+    db: Session = Depends(get_db),
+):
+    """
+    Update a lecture.
+
+    This will automatically update all future calendar events associated with this lecture.
+
+    Example:
+    ```json
+    {
+      "location": "Room 202",
+      "start_time": "10:00:00",
+      "end_time": "12:00:00"
+    }
+    ```
+    """
+    lecture = DegreeService.update_lecture(db, lecture_id, lecture_update)
+    if not lecture:
+        raise HTTPException(status_code=404, detail="Lecture not found")
+    return lecture
+
+
+@router.delete("/lectures/{lecture_id}", status_code=204)
+async def delete_lecture(
+    lecture_id: UUID,
+    db: Session = Depends(get_db),
+):
+    """
+    Delete a lecture.
+
+    This will automatically delete all calendar events associated with this lecture.
+    """
+    success = DegreeService.delete_lecture(db, lecture_id)
+    if not success:
+        raise HTTPException(status_code=404, detail="Lecture not found")
+    return None

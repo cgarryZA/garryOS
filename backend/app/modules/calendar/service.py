@@ -111,7 +111,7 @@ class CalendarService:
 
     @staticmethod
     async def complete_item(db: Session, item_id: UUID, user_id: UUID) -> Optional[CalendarItem]:
-        """Mark a calendar item as completed"""
+        """Mark a calendar item as completed and sync with source if applicable"""
         db_item = CalendarService.get_item(db, item_id, user_id)
         if not db_item:
             return None
@@ -127,6 +127,28 @@ class CalendarService:
         for trigger in triggers:
             trigger.is_active = False
         db.commit()
+
+        # Two-way sync: if this is a coursework task, update coursework status
+        if db_item.source_type == 'coursework' and db_item.source_id:
+            from app.modules.degrees.models import Coursework, CourseworkStatus
+            coursework = db.query(Coursework).filter(Coursework.id == db_item.source_id).first()
+            if coursework and coursework.status not in [CourseworkStatus.SUBMITTED, CourseworkStatus.GRADED]:
+                coursework.status = CourseworkStatus.SUBMITTED
+                coursework.submitted_at = datetime.utcnow()
+                db.commit()
+
+                # Publish sync event
+                await event_bus.publish(
+                    EventTypes.ITEM_UPDATED,
+                    {
+                        "item_id": str(db_item.id),
+                        "title": db_item.title,
+                        "user_id": str(user_id),
+                        "sync_action": "coursework_submitted",
+                        "coursework_id": db_item.source_id,
+                    },
+                    db=db,
+                )
 
         # Publish event
         await event_bus.publish(
