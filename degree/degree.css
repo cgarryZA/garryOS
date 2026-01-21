@@ -1,0 +1,67 @@
+/* ========== RESET / BASE ========== */
+
+* {
+    box-sizing: border-box;
+}
+
+body {
+    margin: 0;
+    padding: 1.5rem;
+    font-family: Arial, Helvetica, sans-serif;
+    background: #f6f6f6;
+}
+
+button {
+    padding: 0.4rem 0.8rem;
+    cursor: pointer;
+}
+
+/* ========== PAGE ========== */
+
+h1 {
+    margin-bottom: 1rem;
+}
+
+#add-degree-btn {
+    margin-bottom: 1.5rem;
+}
+
+/* ========== DEGREES ========== */
+
+#degrees-container {
+    display: flex;
+    flex-direction: column;
+    gap: 1.5rem;
+}
+
+.degree {
+    background: white;
+    padding: 1rem;
+    border-radius: 6px;
+}
+
+.degree h2 {
+    margin: 0 0 0.5rem 0;
+}
+
+/* ========== MODULES ========== */
+
+.modules {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 1rem;
+    margin-top: 0.75rem;
+}
+
+.module-card {
+    background: #eee;
+    padding: 1rem;
+    width: 200px;
+    border-radius: 6px;
+    cursor: pointer;
+    transition: background 0.15s;
+}
+
+.module-card:hover {
+    background: #e2e2e2;
+}

@@ -1,0 +1,161 @@
+/* ========== RESET / BASE ========== */
+[hidden] {
+  display: none !important;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  padding: 1.5rem;
+  font-family: Arial, Helvetica, sans-serif;
+  background: #f6f6f6;
+}
+
+button {
+  padding: 0.4rem 0.8rem;
+  cursor: pointer;
+}
+
+/* ========== HEADER ========== */
+
+#back-btn {
+  margin-bottom: 1rem;
+}
+
+#module-title {
+  margin-top: 0;
+  margin-bottom: 1.5rem;
+}
+
+/* ========== SECTIONS ========== */
+
+h2 {
+  margin-top: 1.5rem;
+  margin-bottom: 0.5rem;
+}
+
+#lectures,
+#formatives,
+#summatives {
+  background: #f0f0f0;
+  min-height: 50px;
+  padding: 0.5rem;
+  border-radius: 4px;
+  margin-bottom: 0.5rem;
+}
+
+/* ========== ROWS ========== */
+
+#lectures div,
+#formatives div,
+#summatives div {
+  background: #eaeaea;
+  padding: 0.4rem 0.6rem;
+  border-radius: 4px;
+  margin-bottom: 0.3rem;
+}
+
+/* ===== MODAL ===== */
+
+#modal-backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.4);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+}
+
+#modal {
+  background: white;
+  padding: 1rem;
+  width: 320px;
+  border-radius: 6px;
+}
+
+#modal-form {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  margin-bottom: 1rem;
+}
+
+.modal-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 0.5rem;
+}
+
+.entry-row {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 8px;
+  background: #eaeaea;
+  border-radius: 4px;
+  margin-bottom: 6px;
+}
+
+.entry-text {
+  flex: 1;
+}
+
+.entry-actions {
+  display: flex;
+  gap: 8px;
+}
+
+.danger-btn {
+  background: #d32f2f;
+  color: white;
+  border: none;
+}
+
+/* ================= LECTURES LIST ================= */
+
+#lectures {
+    background: #ededed;        /* slightly darker than page */
+    padding: 0.75rem;
+    border-radius: 6px;
+    margin-bottom: 0.5rem;
+}
+
+/* One lecture = one horizontal row */
+#lectures > div {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+
+    background: #f7f7f7;
+    padding: 0.5rem 0.75rem;
+    border-radius: 4px;
+    margin-bottom: 0.4rem;
+}
+
+/* Left text */
+#lectures span {
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+/* Right-side buttons */
+#lectures button {
+    margin-left: 0.4rem;
+}
+
+/* Delete button */
+#lectures button.delete {
+    background: #d32f2f;
+    color: white;
+    border: none;
+}
+
+#lectures button.delete:hover {
+    background: #b71c1c;
+}
+

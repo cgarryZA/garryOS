@@ -1,0 +1,67 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Module</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <link rel="stylesheet" href="degree.css">
+</head>
+<body>
+
+<!-- ================= HEADER ================= -->
+
+<button id="back-btn">← Back</button>
+<h1 id="module-title"></h1>
+
+<!-- ================= LECTURES ================= -->
+
+<section>
+  <h2>Lectures</h2>
+
+  <div id="lectures"></div>
+
+  <button id="add-lecture-btn">Add Lecture</button>
+</section>
+
+<!-- ================= FORMATIVES ================= -->
+
+<section>
+  <h2>Formatives</h2>
+
+  <div id="formatives"></div>
+
+  <button id="add-formative-btn">Add Formative</button>
+</section>
+
+<!-- ================= SUMMATIVES ================= -->
+
+<section>
+  <h2>Summatives</h2>
+
+  <div id="summatives"></div>
+
+  <button id="add-summative-btn">Add Summative</button>
+</section>
+
+<!-- ================= MODAL ================= -->
+<!-- IMPORTANT: modal is OUTSIDE sections and HIDDEN BY DEFAULT -->
+
+<div id="modal-backdrop" hidden>
+  <div id="modal">
+    <h3 id="modal-title"></h3>
+
+    <form id="modal-form"></form>
+
+    <div class="modal-actions">
+      <button type="button" id="modal-cancel">Cancel</button>
+      <button type="button" id="modal-confirm">Add</button>
+    </div>
+  </div>
+</div>
+
+<!-- ================= SCRIPT ================= -->
+
+<script src="module.js"></script>
+
+</body>
+</html>
